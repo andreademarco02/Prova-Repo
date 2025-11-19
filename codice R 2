@@ -1,0 +1,163 @@
+# ============================================================================
+# CRAMER-WOLD DEVICE - VERIFICA SPERIMENTALE
+# ============================================================================
+# Obiettivo: verificare che se X e Y hanno distribuzioni diverse,
+# le loro proiezioni γ^T X e γ^T Y hanno distribuzioni diverse
+
+library(ggplot2)
+library(gridExtra)
+
+set.seed(123)
+
+# ----------------------------------------------------------------------------
+# PARAMETRI
+# ----------------------------------------------------------------------------
+p <- 3  # dimensionalità (prova con 2 o 3 come suggerito)
+n <- 5000  # numero di campioni
+
+# ----------------------------------------------------------------------------
+# PASSO 1: Generiamo X e Y da distribuzioni DIVERSE
+# ----------------------------------------------------------------------------
+
+# X ~ N(μ_X, Σ_X) - Normale multivariata
+mu_X <- rep(0, p)
+Sigma_X <- diag(p)  # matrice identità
+
+# Y ~ N(μ_Y, Σ_Y) - Normale con media e covarianza diverse
+mu_Y <- rep(2, p)  # media diversa
+Sigma_Y <- matrix(c(2, 0.5, 0.3,
+                    0.5, 1.5, 0.2,
+                    0.3, 0.2, 1), p, p)  # covarianza diversa
+
+# Generiamo i campioni
+X <- MASS::mvrnorm(n, mu_X, Sigma_X)
+Y <- MASS::mvrnorm(n, mu_Y, Sigma_Y)
+
+cat("Distribuzioni generate:\n")
+cat("X ~ N(μ_X, Σ_X) con μ_X =", mu_X, "\n")
+cat("Y ~ N(μ_Y, Σ_Y) con μ_Y =", mu_Y, "\n\n")
+
+# ----------------------------------------------------------------------------
+# PASSO 2: Generiamo vettore random γ dalla distribuzione uniforme sul 
+# ipercubo [-1,1]^p (come suggerito nell'hint)
+# ----------------------------------------------------------------------------
+
+gamma <- runif(p, -1, 1)
+gamma <- gamma / sqrt(sum(gamma^2))  # normalizziamo (opzionale ma utile)
+
+cat("Vettore di proiezione γ:", gamma, "\n\n")
+
+# ----------------------------------------------------------------------------
+# PASSO 3: Calcoliamo le proiezioni γ^T X e γ^T Y
+# ----------------------------------------------------------------------------
+
+proj_X <- X %*% gamma  # n x 1
+proj_Y <- Y %*% gamma  # n x 1
+
+# ----------------------------------------------------------------------------
+# PASSO 4: Confrontiamo le distribuzioni (visualmente e numericamente)
+# ----------------------------------------------------------------------------
+
+# Test di Kolmogorov-Smirnov
+ks_test <- ks.test(proj_X, proj_Y)
+
+cat("=== RISULTATI ===\n")
+cat("Test di Kolmogorov-Smirnov:\n")
+cat("  Statistica D:", ks_test$statistic, "\n")
+cat("  P-value:", ks_test$p.value, "\n")
+cat("  Interpretazione:", 
+    ifelse(ks_test$p.value < 0.05, 
+           "Le distribuzioni sono SIGNIFICATIVAMENTE DIVERSE ✓",
+           "Non possiamo rifiutare che siano uguali"),
+    "\n\n")
+
+# Statistiche descrittive
+cat("Statistiche delle proiezioni:\n")
+cat("γ^T X: media =", mean(proj_X), ", sd =", sd(proj_X), "\n")
+cat("γ^T Y: media =", mean(proj_Y), ", sd =", sd(proj_Y), "\n\n")
+
+# Distanza tra distribuzioni (come suggerito)
+# Usiamo la distanza di Wasserstein (Earth Mover's Distance)
+wasserstein_dist <- function(x, y) {
+  # Approssimazione semplice tramite quantili
+  q <- seq(0.01, 0.99, by = 0.01)
+  mean(abs(quantile(x, q) - quantile(y, q)))
+}
+
+w_dist <- wasserstein_dist(proj_X, proj_Y)
+cat("Distanza di Wasserstein:", w_dist, "\n\n")
+
+# ----------------------------------------------------------------------------
+# VISUALIZZAZIONI
+# ----------------------------------------------------------------------------
+
+# Plot 1: Overlapping histograms
+df_proj <- data.frame(
+  value = c(proj_X, proj_Y),
+  distribution = rep(c("γ^T X", "γ^T Y"), each = n)
+)
+
+p1 <- ggplot(df_proj, aes(x = value, fill = distribution)) +
+  geom_histogram(alpha = 0.5, position = "identity", bins = 50) +
+  labs(title = "Comparison of Projections",
+       subtitle = paste("KS test p-value:", round(ks_test$p.value, 6)),
+       x = "Projection Value",
+       y = "Frequency") +
+  theme_minimal() +
+  scale_fill_manual(values = c("blue", "red"))
+
+# Plot 2: Density
+p2 <- ggplot(df_proj, aes(x = value, color = distribution)) +
+  geom_density(size = 1.2) +
+  labs(title = "Density of Projections",
+       x = "Projection Value",
+       y = "Density") +
+  theme_minimal() +
+  scale_color_manual(values = c("blue", "red"))
+
+# Plot 3: Q-Q plot
+p3 <- ggplot() +
+  geom_point(aes(x = sort(proj_X), y = sort(proj_Y)), alpha = 0.3) +
+  geom_abline(intercept = 0, slope = 1, color = "red", linetype = "dashed") +
+  labs(title = "Q-Q Plot",
+       x = "Quantiles of γ^T X",
+       y = "Quantiles of γ^T Y") +
+  theme_minimal()
+
+# Plot 4: Empirical CDFs
+p4 <- ggplot(df_proj, aes(x = value, color = distribution)) +
+  stat_ecdf(size = 1.2) +
+  labs(title = "Cumulative Distribution Functions",
+       x = "Projection Value",
+       y = "CDF") +
+  theme_minimal() +
+  scale_color_manual(values = c("blue", "red"))
+
+# Mostra tutti i grafici
+grid.arrange(p1, p2, p3, p4, ncol = 2)
+
+# ----------------------------------------------------------------------------
+# ESPERIMENTO CON MULTIPLE PROIEZIONI
+# ----------------------------------------------------------------------------
+
+cat("\n=== ESPERIMENTO CON MULTIPLE PROIEZIONI ===\n")
+n_projections <- 10
+p_values <- numeric(n_projections)
+
+for (i in 1:n_projections) {
+  gamma_i <- runif(p, -1, 1)
+  gamma_i <- gamma_i / sqrt(sum(gamma_i^2))
+  
+  proj_X_i <- X %*% gamma_i
+  proj_Y_i <- Y %*% gamma_i
+  
+  ks_i <- ks.test(proj_X_i, proj_Y_i)
+  p_values[i] <- ks_i$p.value
+}
+
+cat("P-values per", n_projections, "proiezioni random:\n")
+print(round(p_values, 6))
+cat("\nPercentuale p-values < 0.05:", 
+    mean(p_values < 0.05) * 100, "%\n")
+cat("Conclusione: In", sum(p_values < 0.05), "proiezioni su", n_projections,
+    "le distribuzioni sono significativamente diverse\n")
