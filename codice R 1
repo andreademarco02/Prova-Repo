@@ -1,0 +1,40 @@
+#EXERCISE 1
+
+setwd("C:/Users/Eleonora/OneDrive/Desktop/Classwork1")
+
+df <- read.csv("CRSPday.csv", header = TRUE)
+head(df)
+
+#FOR VARIABLES IB; AND CRSP
+
+#Scatterplot
+plot(df$ibm, df$crsp, pch = 19, col = rgb(0,0,0,0.3),
+     xlab = "IBM returns", ylab = "CRSP returns", main = "IBM vs CRSP")
+
+library(ellipse)
+
+#calculating correlation between ibm and crsp, no NA
+ell <- ellipse(cor(df$ibm, df$crsp, use = "complete.obs"))
+
+#building a matrix with two columns from the calculated correlation 
+lines(mean(df$ibm, na.rm = TRUE) + ell[,1] * sd(df$ibm, na.rm = TRUE),
+      mean(df$crsp, na.rm = TRUE) + ell[,2] * sd(df$crsp, na.rm = TRUE),
+      col = "red", lwd = 2)
+
+par(mfrow = c(1,2))
+plot(density(df$ibm, na.rm = TRUE), main = "IBM marginal density")
+plot(density(df$crsp, na.rm = TRUE), main = "CRSP marginal density")
+
+#Pearson corr coefficient calculation 
+cor(df$ibm, df$crsp, use = "complete.obs")
+
+
+IMB AND CRSP → bivariate Gaussian model 
+X=(X1​,X2​) with X1 = IBM return, X2 = CRSP return.
+
+Both marginals appear approximately symmetric, centred around zero, with light tails and no multimodality.
+  Their shape is compatible with a Gaussian marginal distribution. 
+  The scatterplot shows an elliptical cloud, which is a typical signature of a bivariate normal structure. 
+  IBM and CRSP tend to move in the same direction, with moderate positive dependence. 
+  The sample correlation (≈ 0.49) is moderate and confirms a positive linear dependence, providing additional support for modelling the joint distribution with a Gaussian covariance structure. 
+  No non-linear structure observed.
